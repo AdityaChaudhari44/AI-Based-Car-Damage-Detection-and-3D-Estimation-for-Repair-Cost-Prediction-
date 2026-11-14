@@ -1,0 +1,4 @@
+# PyTorch route: MiDaS depth + ResNet-50 vehicle classifier (CPU build: add --extra-index-url https://download.pytorch.org/whl/cpu)
+torch>=2.2
+torchvision>=0.17
+timm>=0.9          # needed by MiDaS DPT models via torch.hub

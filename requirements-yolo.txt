@@ -1,0 +1,2 @@
+# Optional: fine-tune / run YOLOv8 segmentation
+ultralytics>=8.2

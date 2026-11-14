@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Car Damage AI | 3D Surface & Nearby Garages</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root{--navy:#10243a;--blue:#1769aa;--pale:#f3f7fb;--line:#dce5ee;--muted:#607184}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--pale);color:var(--navy)}
+    header{background:linear-gradient(120deg,#10243a,#1769aa);color:#fff;padding:26px max(20px,calc((100% - 1120px)/2))}
+    header h1{margin:0 0 8px;font-size:27px} header p{margin:0;color:#e0edf8}
+    main{max-width:1120px;margin:24px auto;padding:0 18px 36px;display:grid;gap:20px}
+    .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 5px 20px #19334d0b}
+    h2{font-size:20px;margin:0 0 8px} .sub{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 18px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    label{font-size:14px;font-weight:700;display:block;margin:12px 0 7px}
+    input[type=text],input[type=file]{width:100%;padding:12px;border:1px solid #cbd7e2;border-radius:9px;background:#fff}
+    button,.linkbtn{border:0;border-radius:9px;padding:12px 16px;background:var(--blue);color:white;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+    button.secondary{background:#eaf2f9;color:var(--navy)} button:disabled{opacity:.6;cursor:wait}
+    .actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+    #map{height:390px;width:100%;border:0;border-radius:12px;background:#eaf1f7}
+    #surface3d{height:520px;width:100%;border:1px solid var(--line);border-radius:12px}
+    .pill{display:inline-block;background:#eaf2f9;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700;color:#245477}
+    .status{margin-top:12px;color:var(--muted);font-size:14px;white-space:pre-wrap}
+    .results{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-top:16px}
+    .metric{background:#f3f7fb;border:1px solid var(--line);padding:13px;border-radius:10px}
+    .metric small{display:block;color:var(--muted);margin-bottom:6px}.metric strong{font-size:18px}
+    .notice{font-size:12px;color:var(--muted);line-height:1.5;margin-top:12px}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}header h1{font-size:23px}#map{height:330px}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>AI-Based Car Damage Detection</h1>
+  <p>Damage analysis, repair-cost estimation and nearby garage discovery</p>
+</header>
+<main>
+  <section class="card">
+    <h2>1. Analyze car damage</h2>
+    <p class="sub">Upload a clear JPEG or PNG photo of the damaged vehicle. The app sends it to your local FastAPI analysis service.</p>
+    <form id="analysisForm">
+      <label for="carImage">Car damage image</label>
+      <input id="carImage" type="file" accept="image/jpeg,image/png" required />
+      <div class="actions"><button id="analyzeBtn" type="submit">Analyze damage</button></div>
+    </form>
+    <div id="analysisStatus" class="status" role="status"></div>
+    <div id="analysisResults" class="results"></div>
+    <img id="overlay" alt="Damage detection overlay" style="display:none;max-width:100%;margin-top:16px;border-radius:10px" />
+  </section>
+  <section class="card" id="threeDCard">
+    <h2>2. 3D surface reconstruction</h2>
+    <p class="sub">Creates an interactive 3D surface preview from the uploaded image's estimated relative depth. Red points/surface areas indicate the detected damage mask. Drag to rotate, scroll to zoom, and use the Plotly toolbar to reset or download the view.</p>
+    <div><span class="pill">Approximate relative depth</span> <span class="pill">Interactive 3D mesh</span></div>
+    <div id="surface3d" role="img" aria-label="Interactive 3D surface reconstruction of uploaded car image"></div>
+    <p id="surfaceNote" class="notice">Upload and analyze an image to generate the 3D surface preview.</p>
+    <p class="notice"><strong>Research limitation:</strong> A single RGB image cannot provide verified real-world dent depth in centimetres without calibration or additional views. This visualization is an approximate relative-depth surface, not a measurement-grade reconstruction.</p>
+  </section>
+  <div class="grid">
+    <section class="card">
+      <h2>3. Find nearby garages</h2>
+      <p class="sub">Enter a city, area or full address, or allow browser location access. Google Maps will search for car repair garages near that location.</p>
+      <label for="location">Your location</label>
+      <input id="location" type="text" placeholder="e.g. Dharampeth, Nagpur" />
+      <div class="actions">
+        <button id="searchBtn" type="button">Find garages on map</button>
+        <button id="locateBtn" class="secondary" type="button">Use my location</button>
+      </div>
+      <div id="mapStatus" class="status">Enter a location or use your device location to load nearby garages.</div>
+      <p class="notice">The map uses Google Maps search and does not require a Google Maps API key. Garage details, ratings and opening hours are supplied by Google Maps and may vary.</p>
+    </section>
+    <section class="card">
+      <h2>Google Maps results</h2>
+      <p class="sub">Explore nearby repair shops on the interactive map. Open Google Maps for directions and the latest garage information.</p>
+      <iframe id="map" title="Google Maps nearby car repair garages" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=car%20repair%20garages&output=embed"></iframe>
+      <div class="actions"><a id="openMaps" class="linkbtn" href="https://www.google.com/maps/search/car+repair+garages/" target="_blank" rel="noopener noreferrer">Open results in Google Maps</a></div>
+    </section>
+  </div>
+</main>
+<script>
+  const locationInput = document.getElementById('location');
+  const map = document.getElementById('map');
+  const mapStatus = document.getElementById('mapStatus');
+  const openMaps = document.getElementById('openMaps');
+
+  function showGarages(place) {
+    const q = `car repair garages near ${place}`;
+    map.src = 'https://maps.google.com/maps?q=' + encodeURIComponent(q) + '&output=embed';
+    openMaps.href = 'https://www.google.com/maps/search/' + encodeURIComponent(q) + '/';
+    mapStatus.textContent = `Showing Google Maps search for: ${q}`;
+  }
+  document.getElementById('searchBtn').addEventListener('click', () => {
+    const place = locationInput.value.trim();
+    if (!place) { mapStatus.textContent = 'Please enter a city, area or address first.'; locationInput.focus(); return; }
+    showGarages(place);
+  });
+  document.getElementById('locateBtn').addEventListener('click', () => {
+    if (!navigator.geolocation) { mapStatus.textContent = 'Geolocation is not supported by this browser. Enter your location manually.'; return; }
+    mapStatus.textContent = 'Requesting your location permission…';
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const place = `${pos.coords.latitude},${pos.coords.longitude}`;
+        locationInput.value = place;
+        showGarages(place);
+      },
+      err => { mapStatus.textContent = 'Could not access location. Allow location permission or enter your area manually.'; },
+      {enableHighAccuracy:true, timeout:10000}
+    );
+  });
+
+  function render3DSurface(surface) {
+    const {width, height, depth, colors, note} = surface;
+    const x = [], y = [], z = [];
+    for (let row = 0; row < height; row++) {
+      for (let col = 0; col < width; col++) {
+        x.push(col - (width - 1) / 2);
+        y.push((height - 1) / 2 - row);
+        // Display estimated relative depth as surface elevation. This is not metric depth.
+        z.push((depth[row * width + col] - 0.5) * 20);
+      }
+    }
+    const i = [], j = [], k = [];
+    for (let row = 0; row < height - 1; row++) {
+      for (let col = 0; col < width - 1; col++) {
+        const a = row * width + col, b = a + 1, c = a + width, d = c + 1;
+        // Two triangles per grid cell: (a,b,c) and (b,d,c).
+        i.push(a, b); j.push(b, d); k.push(c, c);
+      }
+    }
+    const trace = {type:'mesh3d', x, y, z, i, j, k, vertexcolor:colors,
+      flatshading:false, opacity:1, hovertemplate:'Image grid: (%{x:.0f}, %{y:.0f})<br>Relative surface height: %{z:.2f}<extra></extra>',
+      lighting:{ambient:0.65,diffuse:0.8,specular:0.25,roughness:0.75,fresnel:0.1},
+      lightposition:{x:100,y:100,z:150}};
+    const layout = {margin:{l:0,r:0,t:10,b:0}, paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
+      scene:{xaxis:{title:'Image X',showbackground:true,backgroundcolor:'#f3f7fb'},
+             yaxis:{title:'Image Y',showbackground:true,backgroundcolor:'#f3f7fb'},
+             zaxis:{title:'Relative depth (scaled)',showbackground:true,backgroundcolor:'#f3f7fb'},
+             aspectmode:'auto', camera:{eye:{x:1.5,y:-1.5,z:1.2}}},
+      showlegend:false};
+    if (window.Plotly) {
+      Plotly.newPlot('surface3d',[trace],layout,{responsive:true,displaylogo:false,scrollZoom:true,
+        modeBarButtonsToRemove:['select2d','lasso2d']});
+      document.getElementById('surfaceNote').textContent = note || '3D surface generated from estimated relative depth. Red regions mark detected damage.';
+    } else {
+      document.getElementById('surfaceNote').textContent = 'The 3D viewer library did not load. Check your internet connection and analyze again.';
+    }
+  }
+
+  document.getElementById('analysisForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const file = document.getElementById('carImage').files[0];
+    if (!file) return;
+    const btn = document.getElementById('analyzeBtn');
+    const status = document.getElementById('analysisStatus');
+    const results = document.getElementById('analysisResults');
+    const overlay = document.getElementById('overlay');
+    btn.disabled = true; status.textContent = 'Analyzing image and preparing 3D surface…'; results.innerHTML = ''; overlay.style.display = 'none';
+    const form = new FormData(); form.append('file', file);
+    try {
+      const response = await fetch('/analyze?overlay=true&include_3d=true', {method:'POST', body:form});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Analysis failed.');
+      const fields = [
+        ['Damage detected', data.damage_detected ? 'Yes' : 'No'],
+        ['Vehicle region', data.region ?? 'N/A'],
+        ['Estimated area', data.area_cm2 == null ? 'N/A' : `${Number(data.area_cm2).toFixed(2)} cm²`],
+        ['Average depth', data.avg_depth == null ? 'N/A' : Number(data.avg_depth).toFixed(3)],
+        ['Estimated repair cost', data.estimated_cost_inr == null ? 'N/A' : `₹${Number(data.estimated_cost_inr).toLocaleString('en-IN')}`],
+        ['Analysis backend', data.backend ?? 'N/A']
+      ];
+      for (const [label,value] of fields) {
+        const el = document.createElement('div'); el.className='metric';
+        const small=document.createElement('small'); small.textContent=label;
+        const strong=document.createElement('strong'); strong.textContent=value;
+        el.append(small,strong); results.append(el);
+      }
+      if (data.overlay_png_base64) { overlay.src='data:image/png;base64,'+data.overlay_png_base64; overlay.style.display='block'; }
+      if (data['3d_surface']) render3DSurface(data['3d_surface']);
+      status.textContent = 'Analysis completed, including the interactive 3D surface preview. Use the nearby garage search below to find repair shops.';
+    } catch (error) {
+      status.textContent = `Could not analyze image: ${error.message}\nMake sure the API dependencies are installed and the server is running.`;
+    } finally { btn.disabled = false; }
+  });
+</script>
+</body>
+</html>
